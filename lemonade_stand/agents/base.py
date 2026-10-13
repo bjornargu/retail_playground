@@ -1,13 +1,26 @@
 import os
 import time
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
+from pathlib import Path
+import re
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
-import re
 
-load_dotenv()
+# Load .env from workspace root or lemonade_stand directory
+_env_root = Path(__file__).resolve().parent.parent.parent / ".env"
+_env_local = Path(__file__).resolve().parent.parent / ".env"
+if _env_local.exists():
+    load_dotenv(dotenv_path=_env_local)
+elif _env_root.exists():
+    load_dotenv(dotenv_path=_env_root)
+else:
+    load_dotenv()
+
+
+
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 
 class BaseAgent:
@@ -16,14 +29,14 @@ class BaseAgent:
         name: str,
         system_instruction: str,
         tools: List[Callable],
-        model: str = "gemini-3.5-flash-lite",
+        model: Optional[str] = None,
     ):
         self.name = name
         self.system_instruction = system_instruction
         self.tools = tools
         self.tool_map: Dict[str, Callable] = {fn.__name__: fn for fn in tools}
-        self.model = model
-        self.client = genai.Client()
+        self.model = model or DEFAULT_MODEL
+        self.client = genai.Client(http_options=types.HttpOptions(timeout=30000))
         self.history: List[types.Content] = []
 
     def reset(self) -> None:
@@ -44,10 +57,10 @@ class BaseAgent:
         )
 
         for turn in range(1, max_turns + 1):
-            print(f"[{self.name} Internal Turn {turn}] Thinking...")
+            print(f"[{self.name} Internal Turn {turn}] Thinking...", flush=True)
 
             response = None
-            max_retries = 4
+            max_retries = 5
             for attempt in range(max_retries):
                 try:
                     response = self.client.models.generate_content(
@@ -65,15 +78,22 @@ class BaseAgent:
                     break
                 except Exception as e:
                     err_msg = str(e)
-                    if "429" in err_msg and attempt < max_retries - 1:
-                        # Extract suggested wait time from error if available (e.g. "retry in 20.11s")
+                    is_transient = any(
+                        code in err_msg
+                        for code in ["429", "503", "500", "504", "UNAVAILABLE", "ResourceExhausted"]
+                    )
+                    if is_transient and attempt < max_retries - 1:
                         delay_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_msg)
                         if delay_match:
                             wait_time = float(delay_match.group(1)) + 1.5
                         else:
-                            wait_time = (attempt + 1) * 10.0
+                            wait_time = (attempt + 1) * 4.0
 
-                        print(f"[{self.name}] Rate limit (429) hit. Backing off for {wait_time:.1f}s (Attempt {attempt+1}/{max_retries})...")
+                        status_label = "Rate limit (429)" if "429" in err_msg else "High server demand / temporary glitch"
+                        print(
+                            f"[{self.name}] {status_label} hit on '{self.model}'. Backing off for {wait_time:.1f}s (Attempt {attempt+1}/{max_retries})...",
+                            flush=True,
+                        )
                         time.sleep(wait_time)
                     else:
                         raise e
@@ -98,7 +118,7 @@ class BaseAgent:
                 tool_name = call.name
                 tool_args = dict(call.args) if call.args else {}
 
-                print(f"  -> Executing Tool: {tool_name}({tool_args})")
+                print(f"  -> Executing Tool: {tool_name}({tool_args})", flush=True)
                 if tool_name not in self.tool_map:
                     output = {"error": f"Tool '{tool_name}' is not registered."}
                 else:
@@ -107,7 +127,7 @@ class BaseAgent:
                     except Exception as e:
                         output = {"error": f"Tool execution failed: {str(e)}"}
 
-                print(f"     Tool Output: {output}")
+                print(f"     Tool Output: {output}", flush=True)
 
                 tool_response_parts.append(
                     types.Part.from_function_response(
@@ -117,6 +137,7 @@ class BaseAgent:
                 )
 
             self.history.append(types.Content(role="user", parts=tool_response_parts))
+
 
         return "I apologize, but I encountered an internal delay processing that request."
 

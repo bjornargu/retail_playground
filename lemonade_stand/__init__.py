@@ -1,0 +1,4 @@
+"""
+Lemonade Stand simulation package.
+"""
+

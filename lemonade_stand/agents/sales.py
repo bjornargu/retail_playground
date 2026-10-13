@@ -1,5 +1,18 @@
-from agents.base import BaseAgent
-from core.tools import execute_sale, get_inventory_status, record_tip
+import sys
+from pathlib import Path
+
+_STAND_DIR = Path(__file__).resolve().parent.parent
+if str(_STAND_DIR) not in sys.path:
+    sys.path.insert(0, str(_STAND_DIR))
+
+try:
+    from agents.base import BaseAgent
+    from core.tools import execute_sale, get_inventory_status, record_tip
+except (ImportError, ModuleNotFoundError):
+    from lemonade_stand.agents.base import BaseAgent
+    from lemonade_stand.core.tools import execute_sale, get_inventory_status, record_tip
+
+
 
 SALES_SYSTEM_INSTRUCTION = r"""
 You are the Point of Sale (POS) and Customer Service representative for the Lemonade Stand.
@@ -25,8 +38,11 @@ Operational Rules & Protocol:
 """
 
 
+from typing import Optional
+
+
 class SalesAgent(BaseAgent):
-    def __init__(self, model: str = "gemini-3.5-flash-lite"):
+    def __init__(self, model: Optional[str] = None):
         super().__init__(
             name="SalesAgent",
             system_instruction=SALES_SYSTEM_INSTRUCTION,

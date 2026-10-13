@@ -1,6 +1,18 @@
 import random
+import sys
+from pathlib import Path
 from typing import Dict, List, Optional
-from agents.base import BaseAgent
+
+_STAND_DIR = Path(__file__).resolve().parent.parent
+if str(_STAND_DIR) not in sys.path:
+    sys.path.insert(0, str(_STAND_DIR))
+
+try:
+    from agents.base import BaseAgent
+except (ImportError, ModuleNotFoundError):
+    from lemonade_stand.agents.base import BaseAgent
+
+
 
 CUSTOMER_SYSTEM_INSTRUCTION = r"""
 You are a customer approaching a roadside lemonade stand.
@@ -37,7 +49,7 @@ SAMPLE_PERSONAS = [
 
 
 class CustomerAgent(BaseAgent):
-    def __init__(self, persona_prompt: str, model: str = "gemini-3.5-flash-lite"):
+    def __init__(self, persona_prompt: str, model: Optional[str] = None):
         full_instruction = f"{CUSTOMER_SYSTEM_INSTRUCTION}\n\nYour Persona:\n{persona_prompt}"
         super().__init__(
             name="CustomerAgent",

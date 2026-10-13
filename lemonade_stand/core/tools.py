@@ -1,6 +1,18 @@
 import sqlite3
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
-from core.db import get_connection
+
+_STAND_DIR = Path(__file__).resolve().parent.parent
+if str(_STAND_DIR) not in sys.path:
+    sys.path.insert(0, str(_STAND_DIR))
+
+try:
+    from core.db import get_connection
+except (ImportError, ModuleNotFoundError):
+    from lemonade_stand.core.db import get_connection
+
+
 
 
 def get_treasury_balance() -> float:

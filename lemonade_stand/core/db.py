@@ -1,7 +1,10 @@
+from pathlib import Path
 import sqlite3
 from typing import Optional
 
-DB_FILE = "lemonade_stand.db"
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_FILE = str(BASE_DIR / "lemonade_stand.db")
+
 
 
 def get_connection() -> sqlite3.Connection:

@@ -1,9 +1,26 @@
-from agents.base import BaseAgent
-from core.tools import (
-    execute_restock,
-    get_inventory_status,
-    get_treasury_balance,
-)
+import sys
+from pathlib import Path
+
+_STAND_DIR = Path(__file__).resolve().parent.parent
+if str(_STAND_DIR) not in sys.path:
+    sys.path.insert(0, str(_STAND_DIR))
+
+try:
+    from agents.base import BaseAgent
+    from core.tools import (
+        execute_restock,
+        get_inventory_status,
+        get_treasury_balance,
+    )
+except (ImportError, ModuleNotFoundError):
+    from lemonade_stand.agents.base import BaseAgent
+    from lemonade_stand.core.tools import (
+        execute_restock,
+        get_inventory_status,
+        get_treasury_balance,
+    )
+
+
 
 PROCUREMENT_SYSTEM_INSTRUCTION = r"""
 You are the Inventory & Procurement Manager for the Lemonade Stand.
@@ -23,8 +40,11 @@ Operational Rules:
 """
 
 
+from typing import Optional
+
+
 class ProcurementAgent(BaseAgent):
-    def __init__(self, model: str = "gemini-3.5-flash-lite"):
+    def __init__(self, model: Optional[str] = None):
         super().__init__(
             name="ProcurementAgent",
             system_instruction=PROCUREMENT_SYSTEM_INSTRUCTION,
