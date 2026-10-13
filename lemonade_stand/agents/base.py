@@ -20,7 +20,7 @@ else:
 
 
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 class BaseAgent:
@@ -83,19 +83,25 @@ class BaseAgent:
                         for code in ["429", "503", "500", "504", "UNAVAILABLE", "ResourceExhausted"]
                     )
                     if is_transient and attempt < max_retries - 1:
-                        delay_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_msg)
+                        delay_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_msg, re.IGNORECASE)
+                        if not delay_match:
+                            delay_match = re.search(r"retry after (\d+(?:\.\d+)?)s", err_msg, re.IGNORECASE)
+
                         if delay_match:
                             wait_time = float(delay_match.group(1)) + 1.5
                         else:
-                            wait_time = (attempt + 1) * 4.0
+                            # If 429 without explicit retry time, wait 15-20s for the rolling window
+                            wait_time = 20.0 if ("429" in err_msg or "ResourceExhausted" in err_msg) else (attempt + 1) * 5.0
 
-                        status_label = "Rate limit (429)" if "429" in err_msg else "High server demand / temporary glitch"
+                        status_label = "Rate limit (429)" if ("429" in err_msg or "ResourceExhausted" in err_msg) else "High server demand / temporary glitch (503)"
                         print(
-                            f"[{self.name}] {status_label} hit on '{self.model}'. Backing off for {wait_time:.1f}s (Attempt {attempt+1}/{max_retries})...",
+                            f"[{self.name}] {status_label} hit on '{self.model}'. Backing off for {wait_time:.1f}s (Attempt {attempt+1}/{max_retries})...\n"
+                            f"  -> API Details: {err_msg.strip()}",
                             flush=True,
                         )
                         time.sleep(wait_time)
                     else:
+                        print(f"[{self.name}] Unrecoverable error on '{self.model}':\n  -> {err_msg.strip()}", flush=True)
                         raise e
 
             candidate = response.candidates[0]
